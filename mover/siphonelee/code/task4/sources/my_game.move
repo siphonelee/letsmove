@@ -265,6 +265,28 @@ module my_game::my_game {
         (dealer.bettor_big.size(), total_bets_big, dealer.bettor_small.size(), total_bets_small)
     }
 
+    ////////////////////////////////////////////////////
+    /////////////////  UNIT TEST  //////////////////////
+    ////////////////////////////////////////////////////
+    #[test_only]
+    use sui::test_scenario;
+    #[test_only]
+    use sui::test_scenario::{next_tx, ctx};
+
+    #[test_only]
+    const EWrongValue: u64 = 1;
+    #[test_only]
+    const EWrongAmout: u64 = 1;
+
+    #[test_only]
+    const AIRDRO_AMOUNT: u64 = 100000;
+    #[test_only]
+    const COIN_IN_AMOUNT: u64 = 2000;
+    #[test_only]
+    const COIN_IN_AMOUNT_MORE: u64 = 3000;
+    #[test_only]
+    const FEE_BP: u16 = 100;
+
     #[test_only]
     /// Wrapper of module initializer for testing
     public fun test_init(ctx: &mut TxContext) {
@@ -272,13 +294,306 @@ module my_game::my_game {
     }
 
     #[test]
-    fun test_my_nft_destroy() {
+    fun test_dealer() {
+        let dealer = @0xA;
+        let mut scenario = test_scenario::begin(dealer);
+ 
+        {  
+            siphonelee_coin::test_init(scenario.ctx());
+            test_init(scenario.ctx());
+        };
 
+        next_tx(&mut scenario, dealer);
+        {
+            let game_cap = test_scenario::take_from_sender<MyGameCap>(&scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<SIPHONELEE_COIN>>(&scenario);
+
+            init_dealer(game_cap, &mut treasury_cap, 1000000, FEE_BP, 300, 100, scenario.ctx());
+
+            test_scenario::return_to_sender(&scenario, treasury_cap);
+        };
+
+        next_tx(&mut scenario, dealer);
+        {
+            let dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let chips_pool = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+
+            assert!(dealer.commission_fee_point == 100, EWrongValue);
+            assert!(dealer.min_time_span == 300, EWrongValue);
+            assert!(dealer.min_bet == 100, EWrongValue);
+            assert!(chips_pool.value() == 1000000, EWrongValue);
+
+            test_scenario::return_shared(dealer);
+            test_scenario::return_to_sender(&scenario, chips_pool);
+        };
+        
+        test_scenario::end(scenario);
     }
 
     #[test]
-    fun test_my_nft_transfer() {
+    fun test_coin_in_coin_out() {
+        let dealer = @0xA;
+        let alice = @0xB;
 
-    }
+        let mut scenario = test_scenario::begin(dealer);
+ 
+        {  
+            siphonelee_coin::test_init(scenario.ctx());
+            test_init(scenario.ctx());
+        };
 
+        next_tx(&mut scenario, dealer);
+        {
+            let game_cap = test_scenario::take_from_sender<MyGameCap>(&scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<SIPHONELEE_COIN>>(&scenario);
+
+            init_dealer(game_cap, &mut treasury_cap, 1000000, FEE_BP, 300, 100, scenario.ctx());
+
+            test_scenario::return_to_sender(&scenario, treasury_cap);
+        };
+
+        let mut chips_pool;
+        next_tx(&mut scenario, dealer);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            chips_pool = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+
+            // airdrop some sui first
+            dealer.coins_pool.join(balance::create_for_testing(AIRDRO_AMOUNT));
+            // transfer some sui to alice
+            let c1 = coin::take(&mut dealer.coins_pool, COIN_IN_AMOUNT, scenario.ctx());
+            transfer::public_transfer(c1, alice);
+
+            test_scenario::return_shared(dealer);
+        };
+        
+        next_tx(&mut scenario, alice);
+        {
+            // coin in
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let coin = test_scenario::take_from_sender<Coin<SUI>>(&scenario);
+            coin_in(&mut dealer, &mut chips_pool, coin, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+
+        next_tx(&mut scenario, alice);
+        {
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+            let v = chips.value();
+            assert!(v == COIN_IN_AMOUNT, EWrongAmout);
+
+            // coin out
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            coin_out(&mut dealer, &mut chips_pool, chips, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+
+        next_tx(&mut scenario, alice);
+        {
+            let coins = test_scenario::take_from_sender<Coin<SUI>>(&scenario);
+            let v = coins.value();
+            assert!(v == COIN_IN_AMOUNT, EWrongAmout);
+
+            transfer::public_transfer(coins, alice);
+        };
+
+        next_tx(&mut scenario, dealer);
+        {
+            test_scenario::return_to_sender(&scenario, chips_pool);
+        };
+
+        test_scenario::end(scenario);
+    }     
+
+    #[test]
+    fun test_bet_return() {
+        let dealer = @0xA;
+        let alice = @0xB;
+        let bob = @0xC;
+        let charlie = @0xD;
+        let daisy = @0xE;
+        let dummy_address = @0xCAFE;
+
+        let mut scenario = test_scenario::begin(dealer);
+ 
+        {  
+            siphonelee_coin::test_init(scenario.ctx());
+            test_init(scenario.ctx());
+        };
+
+        next_tx(&mut scenario, dealer);
+        {
+            let game_cap = test_scenario::take_from_sender<MyGameCap>(&scenario);
+            let mut treasury_cap = test_scenario::take_from_sender<TreasuryCap<SIPHONELEE_COIN>>(&scenario);
+
+            init_dealer(game_cap, &mut treasury_cap, 1000000, FEE_BP, 300, 100, scenario.ctx());
+
+            test_scenario::return_to_sender(&scenario, treasury_cap);
+        };
+
+        let mut chips_pool;
+        next_tx(&mut scenario, dealer);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            chips_pool = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+            // airdrop some sui first
+            dealer.coins_pool.join(balance::create_for_testing(AIRDRO_AMOUNT));
+            // transfer some sui to alice/bob/charlie/daisy
+            let c1 = coin::take(&mut dealer.coins_pool, COIN_IN_AMOUNT, scenario.ctx());
+            transfer::public_transfer(c1, alice);
+            let c2 = coin::take(&mut dealer.coins_pool, COIN_IN_AMOUNT, scenario.ctx());
+            transfer::public_transfer(c2, bob);
+            let c3 = coin::take(&mut dealer.coins_pool, COIN_IN_AMOUNT_MORE, scenario.ctx());
+            transfer::public_transfer(c3, charlie);
+            let c4 = coin::take(&mut dealer.coins_pool, COIN_IN_AMOUNT_MORE, scenario.ctx());
+            transfer::public_transfer(c4, daisy);
+
+            test_scenario::return_shared(dealer);
+        };
+
+        // alice/bob/charlie/daisy coin in
+        next_tx(&mut scenario, alice);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let coin = test_scenario::take_from_sender<Coin<SUI>>(&scenario);
+            coin_in(&mut dealer, &mut chips_pool, coin, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, bob);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let coin = test_scenario::take_from_sender<Coin<SUI>>(&scenario);
+            coin_in(&mut dealer, &mut chips_pool, coin, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, charlie);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let coin = test_scenario::take_from_sender<Coin<SUI>>(&scenario);
+            coin_in(&mut dealer, &mut chips_pool, coin, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, daisy);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let coin = test_scenario::take_from_sender<Coin<SUI>>(&scenario);
+            coin_in(&mut dealer, &mut chips_pool, coin, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+
+        let mut clk = clock::create_for_testing(scenario.ctx());
+
+        // alice/bob/charlie/daisy bet
+        next_tx(&mut scenario, alice);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            start_game(&mut dealer, &clk, scenario.ctx());
+
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+            bet(&mut dealer, &mut chips_pool, true, chips, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, bob);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+            bet(&mut dealer, &mut chips_pool, true, chips, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, charlie);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+            bet(&mut dealer, &mut chips_pool, true, chips, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, daisy);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+            bet(&mut dealer, &mut chips_pool, true, chips, scenario.ctx());
+            test_scenario::return_shared(dealer);
+        };
+
+        // add 10 minutes
+        let ts = clk.timestamp_ms();
+        clk.set_for_testing(ts + 10u64 * 60 * 1000);
+
+        let mut game_ret = 0;
+
+        let user0 = @0x0;
+        let mut ts = test_scenario::begin(user0);
+        random::create_for_testing(ts.ctx());
+
+        // end game
+        next_tx(&mut scenario, bob);
+        {
+            let mut dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let r = test_scenario::take_shared<Random>(&scenario);
+            end_game(&mut dealer, &mut chips_pool, &clk, &r, scenario.ctx());
+            test_scenario::return_shared(dealer);
+            test_scenario::return_shared(r);
+        };
+
+        // alice/bob/charlie/daisy get bet results
+        next_tx(&mut scenario, alice);
+        {
+            let dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+
+            let v = chips.value();
+            game_ret = game_ret + v;
+            assert!(v == 0 || v == COIN_IN_AMOUNT * (10000u64 - (FEE_BP as u64)) / 10000, EWrongAmout);
+
+            transfer::public_transfer(chips, dummy_address);
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, bob);
+        {
+            let dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+
+            let v = chips.value();
+            game_ret = game_ret + v;
+            assert!(v == 0 || v == COIN_IN_AMOUNT * (10000u64 - (FEE_BP as u64)) / 10000, EWrongAmout);
+
+            transfer::public_transfer(chips, dummy_address);
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, charlie);
+        {
+            let dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+
+            let v = chips.value();
+            game_ret = game_ret + v;
+            assert!(v == 0 || v == COIN_IN_AMOUNT_MORE * (10000u64 - (FEE_BP as u64)) / 10000, EWrongAmout);
+
+            transfer::public_transfer(chips, dummy_address);
+            test_scenario::return_shared(dealer);
+        };
+        next_tx(&mut scenario, daisy);
+        {
+            let dealer = test_scenario::take_shared<Dealer>(&scenario);
+            let chips = test_scenario::take_from_sender<Coin<SIPHONELEE_COIN>>(&scenario);
+
+            let v = chips.value();
+            game_ret = game_ret + v;
+            assert!(v == 0 || v == COIN_IN_AMOUNT_MORE * (10000u64 - (FEE_BP as u64)) / 10000, EWrongAmout);
+
+            transfer::public_transfer(chips, dummy_address);
+            test_scenario::return_shared(dealer);
+        };
+        
+        assert!(game_ret == (2 * COIN_IN_AMOUNT + 2 * COIN_IN_AMOUNT_MORE) * (10000u64 - (FEE_BP as u64)) / 10000, EWrongAmout);
+
+        next_tx(&mut scenario, dealer);
+        {
+            test_scenario::return_to_sender(&scenario, chips_pool);
+        };
+
+        ts.end();
+        clock::destroy_for_testing(clk);
+        test_scenario::end(scenario);
+    }   
 }

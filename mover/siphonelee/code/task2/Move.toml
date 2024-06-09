@@ -4,7 +4,7 @@ edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 # testnet
-published-at = "0xbfda14d3a3597fff85c7826ad14b65ea372c7b2ad8aae5520f0b674f8434774b"
+published-at = "0xd33221f20f213050205acd92b7d6776cfb0700ced43e0617cce8bd647a312990"
 # mainnet
 # published-at = "0x5a1db9509ce6c5a325bbc7dd00d88ab9073abfe4f661179750e49667452e6db4"
 
@@ -24,7 +24,7 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 
 [addresses]
 # testnet
-two_coins = "0xbfda14d3a3597fff85c7826ad14b65ea372c7b2ad8aae5520f0b674f8434774b"
+two_coins = "0xd33221f20f213050205acd92b7d6776cfb0700ced43e0617cce8bd647a312990"
 # mainnet
 # two_coins = "0x5a1db9509ce6c5a325bbc7dd00d88ab9073abfe4f661179750e49667452e6db4"
 # two_coins = "0x0"

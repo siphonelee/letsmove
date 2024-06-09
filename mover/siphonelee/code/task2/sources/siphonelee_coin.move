@@ -17,6 +17,10 @@ module two_coins::siphonelee_coin {
         coin::mint_and_transfer(treasury_cap, amount, recipient, ctx);
     }
 
+    public fun mint_without_transfer(treasury_cap: &mut TreasuryCap<SIPHONELEE_COIN>, amount: u64, ctx: &mut TxContext): Coin<SIPHONELEE_COIN> {
+        coin::mint(treasury_cap, amount, ctx)
+    }
+
     public fun burn(treasury_cap: &mut TreasuryCap<SIPHONELEE_COIN>, coin: Coin<SIPHONELEE_COIN>) {
         coin::burn(treasury_cap, coin);
     }
